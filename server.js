@@ -1,7 +1,9 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const redis = require('redis');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL,
@@ -11,7 +13,7 @@ redisClient.on('error', (err) => {
   console.error('Redis connection error:', err);
 });
 
-redisClient.connect();
+redisClient.connect()
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -19,6 +21,49 @@ const port = process.env.PORT || 3000;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+
+app.post('/create-payment-intent', async (req, res) => {
+  const { amount, currency } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({ error: 'Payment processing failed' });
+  }
+});
+
+// send index.html file 
+
+
+app.post('/webhook', async (req, res) => {
+  const payload = req.body;
+  const signature = req.headers['stripe-signature'];
+  const endpointSecret = "whsec_b2f88d5c616fd4bfade64a47c276500b80731dd483c87f5eda11268bcfe79407";
+
+  try {
+    const event = stripe.webhooks.constructEvent(payload, signature, endpointSecret);
+
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      // Update your database or perform any necessary actions
+      console.log('Payment succeeded:', paymentIntent.id);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.sendStatus(400);
+  }
+});
+
+
 
 async function fetchProductsFromDatabase() {
   try {
@@ -31,7 +76,7 @@ async function fetchProductsFromDatabase() {
 }
 
 app.get('/', (req, res) => {
-  res.send('Hello from the e-commerce server!');
+  res.sendFile('index.html', { root: __dirname });
 });
 
 app.get('/products', async (req, res) => {
