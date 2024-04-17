@@ -3,6 +3,7 @@ const express = require('express');
 const { Pool } = require('pg');
 const redis = require('redis');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const cors = require('cors');
 
 
 const redisClient = redis.createClient({
@@ -17,7 +18,11 @@ redisClient.connect()
 
 const app = express();
 const port = process.env.PORT || 3000;
-
+app.use(express.json());
+const corsOptions = {
+  origin: 'http://localhost:3001'
+};
+app.use(cors(corsOptions));
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -39,7 +44,7 @@ app.post('/create-payment-intent', async (req, res) => {
   }
 });
 
-// send index.html file 
+
 
 
 app.post('/webhook', async (req, res) => {
@@ -75,9 +80,6 @@ async function fetchProductsFromDatabase() {
   }
 }
 
-app.get('/', (req, res) => {
-  res.sendFile('index.html', { root: __dirname });
-});
 
 app.get('/products', async (req, res) => {
   try {
@@ -110,6 +112,9 @@ app.get('/products/:id', async (req, res) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.send('Hello from Express!');
+});
 
 app.post('/products', async (req, res) => {
   const { name, description, price, stockQuantity } = req.body;
